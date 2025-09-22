@@ -1,0 +1,74 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+// Container model representing physical gold containers
+model Container {
+  id          String   @id @default(uuid())
+  tagId       String   @unique
+  rfid        String?
+  grams       Float
+  tokens      Float
+  blockNumber Int
+  groupHash   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  group       Group?   @relation(fields: [groupHash], references: [groupHash])
+  
+  // Transactions where this container is the source
+  outgoingTransactions Transaction[] @relation("FromContainer")
+  
+  // Transactions where this container is the destination
+  incomingTransactions Transaction[] @relation("ToContainer")
+
+  @@index([tagId])
+  @@index([rfid])
+  @@index([groupHash])
+  @@index([blockNumber])
+}
+
+// Group model for batch management of containers
+model Group {
+  id          String   @id @default(uuid())
+  groupHash   String   @unique
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  containers  Container[]
+
+  @@index([groupHash])
+}
+
+// Transaction model for tracking token transfers between containers
+model Transaction {
+  id              String   @id @default(uuid())
+  fromTagId       String
+  toTagId         String
+  tokens          Float
+  grams           Float
+  transactionHash String?
+  blockNumber     Int?
+  timestamp       DateTime @default(now())
+
+  // Relations
+  fromContainer   Container @relation("FromContainer", fields: [fromTagId], references: [tagId], onDelete: NoAction, onUpdate: NoAction)
+  toContainer     Container @relation("ToContainer", fields: [toTagId], references: [tagId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([fromTagId])
+  @@index([toTagId])
+  @@index([transactionHash])
+  @@index([blockNumber])
+}
