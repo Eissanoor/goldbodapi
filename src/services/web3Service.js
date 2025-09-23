@@ -169,54 +169,73 @@ class Web3Service {
    */
   setupEventListeners(containerCreatedCallback, tokensTransferredCallback, groupCreatedCallback) {
     if (!this.contract) {
-      throw new Error('Contract not initialized');
+      console.warn('Contract not initialized. Event listeners not set up.');
+      return;
     }
     
     // Listen for ContainerCreated events
-    this.contract.events.ContainerCreated()
-      .on('data', (event) => {
-        const { tagId, rfid, grams, tokens, blockNumber, groupHash, timestamp } = event.returnValues;
-        containerCreatedCallback({
-          tagId,
-          rfid,
-          grams: parseInt(grams),
-          tokens: parseInt(tokens),
-          blockNumber: parseInt(blockNumber),
-          groupHash: this.web3.utils.hexToAscii(groupHash).replace(/\0/g, ''),
-          timestamp: parseInt(timestamp),
-          transactionHash: event.transactionHash
+    try {
+      this.contract.events.ContainerCreated({})
+        .on('data', (event) => {
+          const { tagId, rfid, grams, tokens, blockNumber, groupHash, timestamp } = event.returnValues;
+          containerCreatedCallback({
+            tagId,
+            rfid,
+            grams: parseInt(grams),
+            tokens: parseInt(tokens),
+            blockNumber: parseInt(blockNumber),
+            groupHash: this.web3.utils.hexToString(groupHash).replace(/\0/g, ''),
+            timestamp: parseInt(timestamp),
+            transactionHash: event.transactionHash
+          });
+        })
+        .on('error', (error) => {
+          console.error('Error in ContainerCreated event:', error);
         });
-      })
-      .on('error', console.error);
+    } catch (error) {
+      console.error('Failed to set up ContainerCreated event listener:', error);
+    }
     
     // Listen for TokensTransferred events
-    this.contract.events.TokensTransferred()
-      .on('data', (event) => {
-        const { fromTagId, toTagId, tokens, grams, timestamp } = event.returnValues;
-        tokensTransferredCallback({
-          fromTagId,
-          toTagId,
-          tokens: parseInt(tokens),
-          grams: parseInt(grams),
-          timestamp: parseInt(timestamp),
-          transactionHash: event.transactionHash
+    try {
+      this.contract.events.TokensTransferred({})
+        .on('data', (event) => {
+          const { fromTagId, toTagId, tokens, grams, timestamp } = event.returnValues;
+          tokensTransferredCallback({
+            fromTagId,
+            toTagId,
+            tokens: parseInt(tokens),
+            grams: parseInt(grams),
+            timestamp: parseInt(timestamp),
+            transactionHash: event.transactionHash
+          });
+        })
+        .on('error', (error) => {
+          console.error('Error in TokensTransferred event:', error);
         });
-      })
-      .on('error', console.error);
+    } catch (error) {
+      console.error('Failed to set up TokensTransferred event listener:', error);
+    }
     
     // Listen for GroupCreated events
-    this.contract.events.GroupCreated()
-      .on('data', (event) => {
-        const { groupHash, name, description, timestamp } = event.returnValues;
-        groupCreatedCallback({
-          groupHash: this.web3.utils.hexToAscii(groupHash).replace(/\0/g, ''),
-          name,
-          description,
-          timestamp: parseInt(timestamp),
-          transactionHash: event.transactionHash
+    try {
+      this.contract.events.GroupCreated({})
+        .on('data', (event) => {
+          const { groupHash, name, description, timestamp } = event.returnValues;
+          groupCreatedCallback({
+            groupHash: this.web3.utils.hexToString(groupHash).replace(/\0/g, ''),
+            name,
+            description,
+            timestamp: parseInt(timestamp),
+            transactionHash: event.transactionHash
+          });
+        })
+        .on('error', (error) => {
+          console.error('Error in GroupCreated event:', error);
         });
-      })
-      .on('error', console.error);
+    } catch (error) {
+      console.error('Failed to set up GroupCreated event listener:', error);
+    }
   }
 }
 
