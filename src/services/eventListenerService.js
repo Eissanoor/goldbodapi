@@ -28,6 +28,29 @@ class EventListenerService {
       console.error('Failed to start event listener:', error);
     }
   }
+  
+  /**
+   * Stop listening for blockchain events
+   */
+  stopListening() {
+    if (!this.isListening) {
+      console.log('Event listener is not running');
+      return;
+    }
+    
+    try {
+      // Clear the polling interval if it exists
+      if (web3Service.pollInterval) {
+        clearInterval(web3Service.pollInterval);
+        web3Service.pollInterval = null;
+      }
+      
+      this.isListening = false;
+      console.log('Blockchain event listener stopped');
+    } catch (error) {
+      console.error('Failed to stop event listener:', error);
+    }
+  }
 
   /**
    * Handle ContainerCreated event

@@ -16,7 +16,9 @@ try {
 
 class Web3Service {
   constructor() {
-    this.web3 = new Web3(process.env.SEPOLIA_URL || 'http://localhost:8545');
+    // Prefer explicit WEB3_PROVIDER_URL, fallback to localhost
+    const providerUrl = process.env.WEB3_PROVIDER_URL || 'http://127.0.0.1:8545';
+    this.web3 = new Web3(providerUrl);
     this.contractAddress = process.env.CONTRACT_ADDRESS;
     this.privateKey = process.env.PRIVATE_KEY;
     
@@ -173,69 +175,192 @@ class Web3Service {
       return;
     }
     
-    // Listen for ContainerCreated events
-    try {
-      this.contract.events.ContainerCreated({})
-        .on('data', (event) => {
-          const { tagId, rfid, grams, tokens, blockNumber, groupHash, timestamp } = event.returnValues;
-          containerCreatedCallback({
-            tagId,
-            rfid,
-            grams: parseInt(grams),
-            tokens: parseInt(tokens),
-            blockNumber: parseInt(blockNumber),
-            groupHash: this.web3.utils.hexToString(groupHash).replace(/\0/g, ''),
-            timestamp: parseInt(timestamp),
-            transactionHash: event.transactionHash
-          });
-        })
-        .on('error', (error) => {
-          console.error('Error in ContainerCreated event:', error);
-        });
-    } catch (error) {
-      console.error('Failed to set up ContainerCreated event listener:', error);
-    }
+    console.log('Setting up event polling...');
     
-    // Listen for TokensTransferred events
-    try {
-      this.contract.events.TokensTransferred({})
-        .on('data', (event) => {
-          const { fromTagId, toTagId, tokens, grams, timestamp } = event.returnValues;
-          tokensTransferredCallback({
-            fromTagId,
-            toTagId,
-            tokens: parseInt(tokens),
-            grams: parseInt(grams),
-            timestamp: parseInt(timestamp),
-            transactionHash: event.transactionHash
-          });
-        })
-        .on('error', (error) => {
-          console.error('Error in TokensTransferred event:', error);
-        });
-    } catch (error) {
-      console.error('Failed to set up TokensTransferred event listener:', error);
-    }
+    // Instead of using subscriptions which aren't supported by all providers,
+    // we'll set up a polling mechanism to check for events periodically
     
-    // Listen for GroupCreated events
-    try {
-      this.contract.events.GroupCreated({})
-        .on('data', (event) => {
-          const { groupHash, name, description, timestamp } = event.returnValues;
-          groupCreatedCallback({
-            groupHash: this.web3.utils.hexToString(groupHash).replace(/\0/g, ''),
-            name,
-            description,
-            timestamp: parseInt(timestamp),
-            transactionHash: event.transactionHash
+    // Store the last processed block number (Number)
+    let lastProcessedBlock = 0;
+    
+    // Function to get the current block number as Number
+    const getCurrentBlock = async () => {
+      try {
+        const bn = await this.web3.eth.getBlockNumber(); // may be BigInt
+        return typeof bn === 'bigint' ? Number(bn) : Number(bn);
+      } catch (error) {
+        console.error('Error getting current block number:', error);
+        return lastProcessedBlock;
+      }
+    };
+    
+    // Function to process events in a block range (Numbers)
+    const processEvents = async (fromBlock, toBlock) => {
+      try {
+        console.log(`Checking for events from block ${fromBlock} to ${toBlock}`);
+        
+        // Get past ContainerCreated events
+        try {
+          const containerCreatedEvents = await this.web3.eth.getPastLogs({
+            address: this.contractAddress,
+            fromBlock: Number(fromBlock),
+            toBlock: Number(toBlock),
+            topics: [this.web3.utils.keccak256('ContainerCreated(string,string,uint256,uint256,uint256,bytes32,uint256)')]
           });
-        })
-        .on('error', (error) => {
-          console.error('Error in GroupCreated event:', error);
-        });
-    } catch (error) {
-      console.error('Failed to set up GroupCreated event listener:', error);
-    }
+          
+          for (const event of containerCreatedEvents) {
+            console.log('ContainerCreated event found:', event);
+            try {
+              // Process the event
+              const decodedLog = this.web3.eth.abi.decodeLog(
+                [
+                  { type: 'string', name: 'tagId', indexed: true },
+                  { type: 'string', name: 'rfid' },
+                  { type: 'uint256', name: 'grams' },
+                  { type: 'uint256', name: 'tokens' },
+                  { type: 'uint256', name: 'blockNumber' },
+                  { type: 'bytes32', name: 'groupHash', indexed: true },
+                  { type: 'uint256', name: 'timestamp' }
+                ],
+                event.data,
+                event.topics.slice(1)
+              );
+              
+              containerCreatedCallback({
+                tagId: decodedLog.tagId,
+                rfid: decodedLog.rfid,
+                grams: parseInt(decodedLog.grams),
+                tokens: parseInt(decodedLog.tokens),
+                blockNumber: parseInt(decodedLog.blockNumber),
+                groupHash: this.web3.utils.hexToString(decodedLog.groupHash).replace(/\0/g, ''),
+                timestamp: parseInt(decodedLog.timestamp),
+                transactionHash: event.transactionHash
+              });
+            } catch (error) {
+              console.error('Error processing ContainerCreated event:', error);
+            }
+          }
+        } catch (error) {
+          console.error('Error getting ContainerCreated events:', error);
+        }
+        
+        // Get past TokensTransferred events
+        try {
+          const tokensTransferredEvents = await this.web3.eth.getPastLogs({
+            address: this.contractAddress,
+            fromBlock: Number(fromBlock),
+            toBlock: Number(toBlock),
+            topics: [this.web3.utils.keccak256('TokensTransferred(string,string,uint256,uint256,uint256)')]
+          });
+          
+          for (const event of tokensTransferredEvents) {
+            console.log('TokensTransferred event found:', event);
+            try {
+              // Process the event
+              const decodedLog = this.web3.eth.abi.decodeLog(
+                [
+                  { type: 'string', name: 'fromTagId', indexed: true },
+                  { type: 'string', name: 'toTagId', indexed: true },
+                  { type: 'uint256', name: 'tokens' },
+                  { type: 'uint256', name: 'grams' },
+                  { type: 'uint256', name: 'timestamp' }
+                ],
+                event.data,
+                event.topics.slice(1)
+              );
+              
+              tokensTransferredCallback({
+                fromTagId: decodedLog.fromTagId,
+                toTagId: decodedLog.toTagId,
+                tokens: parseInt(decodedLog.tokens),
+                grams: parseInt(decodedLog.grams),
+                timestamp: parseInt(decodedLog.timestamp),
+                transactionHash: event.transactionHash
+              });
+            } catch (error) {
+              console.error('Error processing TokensTransferred event:', error);
+            }
+          }
+        } catch (error) {
+          console.error('Error getting TokensTransferred events:', error);
+        }
+        
+        // Get past GroupCreated events
+        try {
+          const groupCreatedEvents = await this.web3.eth.getPastLogs({
+            address: this.contractAddress,
+            fromBlock: Number(fromBlock),
+            toBlock: Number(toBlock),
+            topics: [this.web3.utils.keccak256('GroupCreated(bytes32,string,string,uint256)')]
+          });
+          
+          for (const event of groupCreatedEvents) {
+            console.log('GroupCreated event found:', event);
+            try {
+              // Process the event
+              const decodedLog = this.web3.eth.abi.decodeLog(
+                [
+                  { type: 'bytes32', name: 'groupHash', indexed: true },
+                  { type: 'string', name: 'name' },
+                  { type: 'string', name: 'description' },
+                  { type: 'uint256', name: 'timestamp' }
+                ],
+                event.data,
+                event.topics.slice(1)
+              );
+              
+              groupCreatedCallback({
+                groupHash: this.web3.utils.hexToString(decodedLog.groupHash).replace(/\0/g, ''),
+                name: decodedLog.name,
+                description: decodedLog.description,
+                timestamp: parseInt(decodedLog.timestamp),
+                transactionHash: event.transactionHash
+              });
+            } catch (error) {
+              console.error('Error processing GroupCreated event:', error);
+            }
+          }
+        } catch (error) {
+          console.error('Error getting GroupCreated events:', error);
+        }
+      } catch (error) {
+        console.error('Error processing events:', error);
+      }
+    };
+    
+    // Start polling for events
+    const pollEvents = async () => {
+      try {
+        // Get the current block number
+        const currentBlock = await getCurrentBlock();
+        
+        // If this is the first time, just set the last processed block and return
+        if (lastProcessedBlock === 0) {
+          lastProcessedBlock = currentBlock;
+          console.log(`Starting event polling from block ${lastProcessedBlock}`);
+          return;
+        }
+        
+        // If there are new blocks, process them
+        if (currentBlock > lastProcessedBlock) {
+          await processEvents(lastProcessedBlock + 1, currentBlock);
+          lastProcessedBlock = currentBlock;
+        }
+      } catch (error) {
+        console.error('Error polling events:', error);
+      }
+    };
+    
+    // Initial poll
+    pollEvents();
+    
+    // Set up interval to poll for events every 10 seconds
+    const pollInterval = setInterval(pollEvents, 10000);
+    
+    // Store the interval ID so it can be cleared later if needed
+    this.pollInterval = pollInterval;
+    
+    console.log('Event polling set up successfully');
   }
 }
 

@@ -58,22 +58,71 @@ const server = app.listen(PORT, () => {
   // Start blockchain event listener if contract address is set
   if (process.env.CONTRACT_ADDRESS) {
     try {
-      eventListenerService.startListening();
-      console.log('Blockchain event listener started');
+      // Check if we can connect to the blockchain
+      const fs = require('fs');
+      const path = require('path');
+      
+      // Try to load deployment info
+      const deploymentInfoPath = path.join(__dirname, 'deployment-info.json');
+      
+      if (fs.existsSync(deploymentInfoPath)) {
+        const deploymentInfo = JSON.parse(fs.readFileSync(deploymentInfoPath, 'utf8'));
+        console.log(`Using contract deployed at: ${deploymentInfo.contractAddress}`);
+        console.log(`Network: ${deploymentInfo.deploymentNetwork}`);
+        
+        // Start the event listener
+        eventListenerService.startListening();
+      } else {
+        console.log('No deployment-info.json found. Using CONTRACT_ADDRESS from environment variables.');
+        console.log(`Contract address: ${process.env.CONTRACT_ADDRESS}`);
+        
+        // Start the event listener
+        eventListenerService.startListening();
+      }
     } catch (error) {
       console.error('Failed to start blockchain event listener:', error);
+      console.error('The server will continue running, but blockchain events will not be processed.');
     }
   } else {
     console.warn('CONTRACT_ADDRESS not set in environment variables. Blockchain event listener not started.');
+    console.warn('The server will continue running, but blockchain events will not be processed.');
   }
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received: closing HTTP server');
+  
+  // Stop the blockchain event listener
+  try {
+    eventListenerService.stopListening();
+    console.log('Blockchain event listener stopped');
+  } catch (error) {
+    console.error('Error stopping blockchain event listener:', error);
+  }
+  
   server.close(() => {
     console.log('HTTP server closed');
     prisma.$disconnect();
+  });
+});
+
+// Handle SIGINT (Ctrl+C)
+process.on('SIGINT', () => {
+  console.log('SIGINT signal received: closing HTTP server');
+  
+  // Stop the blockchain event listener
+  try {
+    eventListenerService.stopListening();
+    console.log('Blockchain event listener stopped');
+  } catch (error) {
+    console.error('Error stopping blockchain event listener:', error);
+  }
+  
+  server.close(() => {
+    console.log('HTTP server closed');
+    prisma.$disconnect();
+    process.exit(0);
   });
 });
 
