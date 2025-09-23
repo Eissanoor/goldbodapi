@@ -94,8 +94,14 @@ exports.getContainerHistory = async (req, res, next) => {
     // Get container transactions
     const transactions = await prismaService.getContainerTransactions(tagId);
     
-    // Get container history from blockchain
-    const blockchainHistory = await web3Service.getContainerHistory(tagId);
+  // Get container history from blockchain (graceful fallback if chain not aligned)
+  let blockchainHistory = [];
+  try {
+    blockchainHistory = await web3Service.getContainerHistory(tagId);
+  } catch (chainErr) {
+    // Do not fail the endpoint if chain call reverts (e.g., wrong network/address or not minted yet)
+    blockchainHistory = [];
+  }
     
     res.status(200).json({
       success: true,
