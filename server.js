@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('./src/services/db');
 const fs = require('fs');
 const path = require('path');
 
@@ -10,8 +10,7 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Initialize Prisma client
-const prisma = new PrismaClient();
+// Prisma client provided by singleton in ./src/services/db
 
 // Import services
 const eventListenerService = require('./src/services/eventListenerService');

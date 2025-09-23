@@ -1,5 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('./db');
 
 class PrismaService {
   /**
@@ -8,13 +7,14 @@ class PrismaService {
    * @returns {Promise<Object>} - Created container
    */
   async createContainer(data) {
+    const blockNumber = typeof data.blockNumber === 'bigint' ? Number(data.blockNumber) : data.blockNumber;
     return prisma.container.create({
       data: {
         tagId: data.tagId,
         rfid: data.rfid,
         grams: data.grams,
         tokens: data.tokens,
-        blockNumber: data.blockNumber,
+        blockNumber,
         groupHash: data.groupHash || null
       }
     });
@@ -50,6 +50,7 @@ class PrismaService {
    * @returns {Promise<Object>} - Created transaction
    */
   async createTransaction(data) {
+    const blockNumber = typeof data.blockNumber === 'bigint' ? Number(data.blockNumber) : data.blockNumber;
     return prisma.transaction.create({
       data: {
         fromTagId: data.fromTagId,
@@ -57,7 +58,7 @@ class PrismaService {
         tokens: data.tokens,
         grams: data.grams,
         transactionHash: data.transactionHash,
-        blockNumber: data.blockNumber
+        blockNumber
       }
     });
   }

@@ -44,6 +44,15 @@ class Web3Service {
     }
   }
 
+  // Normalize input to a valid bytes32 hex string
+  toBytes32(input) {
+    const zeroBytes32 = '0x' + '0'.repeat(64);
+    if (!input || (typeof input === 'string' && input.trim() === '')) return zeroBytes32;
+    if (typeof input === 'string' && /^0x[0-9a-fA-F]{64}$/.test(input)) return input;
+    // Hash arbitrary input to bytes32
+    return this.web3.utils.keccak256(String(input));
+  }
+
   /**
    * Create a new container on the blockchain
    * @param {string} tagId - Unique identifier for the container
@@ -57,7 +66,7 @@ class Web3Service {
       throw new Error('Contract not initialized');
     }
 
-    const formattedGroupHash = this.web3.utils.stringToHex(groupHash);
+    const formattedGroupHash = this.toBytes32(groupHash);
     
     const tx = this.contract.methods.createContainer(tagId, rfid, grams, formattedGroupHash);
     
@@ -111,7 +120,7 @@ class Web3Service {
       throw new Error('Contract not initialized');
     }
     
-    const formattedGroupHash = this.web3.utils.stringToHex(groupHash);
+    const formattedGroupHash = this.toBytes32(groupHash);
     
     const tx = this.contract.methods.createGroup(formattedGroupHash, name, description);
     
