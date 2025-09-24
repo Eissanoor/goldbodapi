@@ -25,11 +25,13 @@ app.use(express.urlencoded({ extended: true }));
 const containerRoutes = require('./src/routes/containerRoutes');
 const transactionRoutes = require('./src/routes/transactionRoutes');
 const groupRoutes = require('./src/routes/groupRoutes');
+const analyticsRoutes = require('./src/routes/analyticsRoutes');
 
 // Use routes
 app.use('/api/containers', containerRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/groups', groupRoutes);
+app.use('/api', analyticsRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
